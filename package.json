@@ -1,0 +1,21 @@
+{
+  "name": "miband7pro-monitor",
+  "description": "Real-time heart rate monitor for Xiaomi Smart Band 7 Pro",
+  "version": "2.0.0",
+  "scripts": {
+    "clean": "shx rm -rf dist/*",
+    "build": "esbuild --bundle src/index.js --outfile=dist/bundle.js && shx cp src/index.html src/style.css dist/",
+    "serve": "npm run build && npx http-server dist/ -p 8081",
+    "lint": "prettier --write src/"
+  },
+  "dependencies": {
+    "esbuild": "^0.8.57",
+    "http-server": "^14.1.1",
+    "shx": "^0.3.4"
+  },
+  "devDependencies": {
+    "apexcharts": "^3.24.0",
+    "eslint": "^8.7.0",
+    "prettier": "^2.2.1"
+  }
+}

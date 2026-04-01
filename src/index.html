@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Real-time heart rate monitor for Xiaomi Smart Band 7 Pro via Web Bluetooth" />
+    <title>Mi Band 7 Pro · Heart Rate Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <!-- ── Connect overlay ─────────────────────────────────────────────── -->
+    <div id="overlay" class="overlay">
+        <div class="modal glass">
+            <div class="modal-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+            </div>
+            <h1 class="modal-title">Mi Band 7 Pro</h1>
+            <p class="modal-sub">Real-Time Heart Rate Monitor</p>
+
+            <div class="form-row">
+                <label for="auth-key-input">Auth Key
+                    <a href="https://codeberg.org/Freeyourgadget/Gadgetbridge/wiki/Xiaomi-Devices"
+                       target="_blank" rel="noopener">What is this?</a>
+                </label>
+                <input id="auth-key-input" type="text" placeholder="32 hex characters e.g. 94359d5b…"
+                       autocomplete="off" spellcheck="false" />
+            </div>
+
+            <button id="connect-btn" class="btn-primary" disabled>
+                <span class="btn-icon">
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z"/>
+                    </svg>
+                </span>
+                Connect via Bluetooth
+            </button>
+
+            <div id="status-msg" class="status-msg"></div>
+        </div>
+    </div>
+
+    <!-- ── Main app ─────────────────────────────────────────────────────── -->
+    <div id="app" class="app hidden">
+
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-brand">
+                <svg class="brand-icon" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd" />
+                </svg>
+                <span>Mi Band 7 Pro</span>
+            </div>
+
+            <nav class="topbar-stats">
+                <div class="stat-pill" id="stat-steps">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13 6H7v2h6V6zM7 10h6v2H7v-2z"/><path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm14 2H3v10h14V5z" clip-rule="evenodd"/></svg>
+                    <span id="steps-val">--</span> steps
+                </div>
+                <div class="stat-pill" id="stat-cals">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1.017A7.001 7.001 0 0110 18a7 7 0 01-1-13.983V3a1 1 0 011-1z"/></svg>
+                    <span id="cals-val">--</span> kcal
+                </div>
+                <div class="connection-dot" id="conn-dot" title="Connected"></div>
+            </nav>
+
+            <button id="disconnect-btn" class="btn-ghost">Disconnect</button>
+        </header>
+
+        <!-- HR hero -->
+        <section class="hero">
+            <div class="hr-display">
+                <div class="hr-label">HEART RATE</div>
+                <div class="hr-value-wrap">
+                    <div id="hr-value" class="hr-value">--</div>
+                    <div class="hr-unit">bpm</div>
+                </div>
+                <div id="hr-timestamp" class="hr-ts">Waiting for data…</div>
+                <div class="hr-zones">
+                    <div class="zone" data-zone="rest">REST<br><span>40–60</span></div>
+                    <div class="zone" data-zone="fat">FAT BURN<br><span>61–110</span></div>
+                    <div class="zone" data-zone="cardio">CARDIO<br><span>111–150</span></div>
+                    <div class="zone" data-zone="peak">PEAK<br><span>151+</span></div>
+                </div>
+            </div>
+
+            <!-- Session stats -->
+            <div class="session-stats">
+                <div class="sstat">
+                    <div class="sstat-val" id="ss-min">--</div>
+                    <div class="sstat-lbl">MIN</div>
+                </div>
+                <div class="sstat">
+                    <div class="sstat-val" id="ss-avg">--</div>
+                    <div class="sstat-lbl">AVG</div>
+                </div>
+                <div class="sstat">
+                    <div class="sstat-val" id="ss-max">--</div>
+                    <div class="sstat-lbl">MAX</div>
+                </div>
+                <div class="sstat">
+                    <div class="sstat-val" id="ss-count">0</div>
+                    <div class="sstat-lbl">READINGS</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chart -->
+        <section class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">Live Feed  <span class="chart-sub">(last 60 readings)</span></span>
+                <button id="clear-btn" class="btn-ghost btn-sm">Clear</button>
+            </div>
+            <div id="hr-chart" class="chart-container"></div>
+        </section>
+
+    </div>
+
+    <script src="bundle.js"></script>
+    <script>
+        // ── State ─────────────────────────────────────────────────────────────
+        let band = null;
+        let chart = null;
+        const readings = [];
+        let keepaliveTimer = null;
+
+        // ── DOM refs ──────────────────────────────────────────────────────────
+        const overlay       = document.getElementById("overlay");
+        const app           = document.getElementById("app");
+        const authInput     = document.getElementById("auth-key-input");
+        const connectBtn    = document.getElementById("connect-btn");
+        const disconnectBtn = document.getElementById("disconnect-btn");
+        const clearBtn      = document.getElementById("clear-btn");
+        const statusMsg     = document.getElementById("status-msg");
+        const hrValue       = document.getElementById("hr-value");
+        const hrTs          = document.getElementById("hr-timestamp");
+        const stepsVal      = document.getElementById("steps-val");
+        const calsVal       = document.getElementById("cals-val");
+        const ssMin         = document.getElementById("ss-min");
+        const ssAvg         = document.getElementById("ss-avg");
+        const ssMax         = document.getElementById("ss-max");
+        const ssCount       = document.getElementById("ss-count");
+        const connDot       = document.getElementById("conn-dot");
+        const zones         = document.querySelectorAll(".zone");
+
+        // ── Restore auth key ──────────────────────────────────────────────────
+        const savedKey = localStorage.getItem("mi-auth-key");
+        if (savedKey) authInput.value = savedKey;
+        validateKey();
+
+        authInput.addEventListener("input", validateKey);
+
+        function validateKey() {
+            const v = authInput.value.trim().replace(/^0x/, "").replace(/\s/g, "");
+            connectBtn.disabled = v.length !== 32 || !/^[0-9a-fA-F]+$/.test(v);
+        }
+
+        // ── HR zone helper ────────────────────────────────────────────────────
+        function getZone(bpm) {
+            if (bpm <= 60)  return "rest";
+            if (bpm <= 110) return "fat";
+            if (bpm <= 150) return "cardio";
+            return "peak";
+        }
+
+        function updateZone(bpm) {
+            const z = getZone(bpm);
+            zones.forEach(el => el.classList.toggle("active", el.dataset.zone === z));
+        }
+
+        // ── Session stats ─────────────────────────────────────────────────────
+        function updateStats(bpm) {
+            readings.push(bpm);
+            const min = Math.min(...readings);
+            const max = Math.max(...readings);
+            const avg = readings.reduce((a, b) => a + b, 0) / readings.length;
+            ssMin.textContent = min;
+            ssMax.textContent = max;
+            ssAvg.textContent = avg.toFixed(0);
+            ssCount.textContent = readings.length;
+        }
+
+        // ── Heart rate update ─────────────────────────────────────────────────
+        function onHeartRate({ hr, steps, cals, ts }) {
+            if (hr === 0) return; // ignore zero readings
+
+            hrValue.textContent = hr;
+            hrValue.classList.add("pulse");
+            setTimeout(() => hrValue.classList.remove("pulse"), 600);
+
+            const hh = ts.getHours().toString().padStart(2, "0");
+            const mm = ts.getMinutes().toString().padStart(2, "0");
+            const ss = ts.getSeconds().toString().padStart(2, "0");
+            hrTs.textContent = `Last reading at ${hh}:${mm}:${ss}`;
+
+            stepsVal.textContent = steps;
+            calsVal.textContent  = cals;
+
+            updateZone(hr);
+            updateStats(hr);
+
+            if (chart) chart.push(ts, hr);
+        }
+
+        // ── Connect ───────────────────────────────────────────────────────────
+        connectBtn.addEventListener("click", async () => {
+            const key = authInput.value.trim().replace(/^0x/, "").replace(/\s/g, "");
+            localStorage.setItem("mi-auth-key", authInput.value.trim());
+
+            setStatus("Requesting Bluetooth device…", "info");
+            connectBtn.disabled = true;
+
+            try {
+                band = new Band7Pro(key);
+
+                band.addEventListener("connected", () => {
+                    connDot.classList.add("online");
+                });
+                band.addEventListener("disconnected", () => {
+                    connDot.classList.remove("online");
+                    setStatus("Band disconnected.", "warn");
+                    clearInterval(keepaliveTimer);
+                });
+                band.addEventListener("heartrate", (e) => onHeartRate(e.detail));
+
+                setStatus("Connecting…", "info");
+                await band.connect();
+
+                setStatus("Authenticating…", "info");
+                await band.authenticate();
+
+                setStatus("Starting real-time heart rate…", "info");
+                await band.startRealtimeHeartRate();
+
+                // Keep-alive: re-send start every 30 s
+                keepaliveTimer = setInterval(async () => {
+                    if (band) await band.startRealtimeHeartRate().catch(() => {});
+                }, 30000);
+
+                // Switch views
+                overlay.classList.add("hidden");
+                app.classList.remove("hidden");
+
+                // Init chart
+                chart = new HrChart("#hr-chart");
+
+            } catch (e) {
+                console.error(e);
+                setStatus("Error: " + e.message, "error");
+                connectBtn.disabled = false;
+            }
+        });
+
+        // ── Disconnect ────────────────────────────────────────────────────────
+        disconnectBtn.addEventListener("click", async () => {
+            clearInterval(keepaliveTimer);
+            if (band) {
+                await band.stopRealtimeHeartRate().catch(() => {});
+                await band.disconnect().catch(() => {});
+                band = null;
+            }
+            app.classList.add("hidden");
+            overlay.classList.remove("hidden");
+            connectBtn.disabled = false;
+            readings.length = 0;
+            setStatus("", "");
+        });
+
+        // ── Clear chart ───────────────────────────────────────────────────────
+        clearBtn.addEventListener("click", () => {
+            if (chart) chart.clear();
+        });
+
+        // ── Status helper ─────────────────────────────────────────────────────
+        function setStatus(msg, type) {
+            statusMsg.textContent = msg;
+            statusMsg.className = "status-msg " + (type || "");
+        }
+    </script>
+</body>
+</html>
